@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -449,14 +450,14 @@
   // ── Supabase Config ──
   const supabaseUrl = 'https://xapomtlcxjwyyqoiprri.supabase.co';
   const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhcG9tdGxjeGp3eXlxb2lwcnJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMzYwMDksImV4cCI6MjA4OTcxMjAwOX0.ovKvPNbM_MFcUh-hEN7N1EhumzIlV4rRiXwrCmefPuc';
-  const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+  const _supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
   // ── Data Store ──
   let records = [];
 
   // Demo data (only on first load if cloud is empty)
   async function initDemoData() {
-    const { data, error } = await supabase.from('records').select('*');
+    const { data, error } = await _supabase.from('records').select('*');
     if (error) { console.error('Init error:', error); return; }
     records = data.map(r => ({ id: r.record_id, date: r.date, name: r.name, type: r.type, amount: r.amount, note: r.note }));
     if (records.length === 0) {
@@ -472,7 +473,7 @@
         { id: Date.now()-1, date:'2026-03-22', name:'Suno AI 订阅',           type:'expense', amount:80,   note:'音乐生成' },
       ];
       for (const r of demo) {
-        await supabase.from('records').insert({ record_id: r.id, date: r.date, name: r.name, type: r.type, amount: r.amount, note: r.note });
+        await _supabase.from('records').insert({ record_id: r.id, date: r.date, name: r.name, type: r.type, amount: r.amount, note: r.note });
       }
       records = demo;
     }
@@ -486,7 +487,7 @@
   }
 
   async function fetchRecords() {
-    const { data, error } = await supabase.from('records').select('*').order('created_at', { ascending: false });
+    const { data, error } = await _supabase.from('records').select('*').order('created_at', { ascending: false });
     if (error) { console.error('Fetch error:', error); document.getElementById('sync-status').textContent = '同步失败，请刷新'; return; }
     records = data.map(r => ({ id: r.record_id, date: r.date, name: r.name, type: r.type, amount: r.amount, note: r.note }));
     renderAll3();
@@ -579,7 +580,7 @@
   // ── Delete ──
   async function deleteRecord(id) {
     if (!confirm('确认删除该记录？')) return;
-    const { error } = await supabase.from('records').delete().eq('record_id', id);
+    const { error } = await _supabase.from('records').delete().eq('record_id', id);
     if (error) { alert('删除失败：' + error.message); return; }
     await fetchRecords();
   }
@@ -641,12 +642,12 @@
     }
     if (editingId !== null) {
       // 编辑模式：更新已有记录
-      const { error } = await supabase.from('records').update({ date, name, type, amount, note }).eq('record_id', editingId);
+      const { error } = await _supabase.from('records').update({ date, name, type, amount, note }).eq('record_id', editingId);
       if (error) { alert('更新失败：' + error.message); return; }
     } else {
       // 新增模式
       const newId = Date.now();
-      const { error } = await supabase.from('records').insert({ record_id: newId, date, name, type, amount, note });
+      const { error } = await _supabase.from('records').insert({ record_id: newId, date, name, type, amount, note });
       if (error) { alert('添加失败：' + error.message); return; }
     }
     await fetchRecords();
