@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI 消费记录表</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --primary: #6c63ff;
+      --income: #10b981;
+      --expense: #f43f5e;
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface2: #273549;
+      --border: #334155;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px 16px 48px;
+    }
+
+    /* ── Header ── */
+    .page-header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    .page-header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #6c63ff, #38bdf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: 2px;
+    }
+    .page-header p {
+      color: var(--text-muted);
+      margin-top: 6px;
+      font-size: 0.9rem;
+    }
+
+    /* ── Summary Cards ── */
+    .summary {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px 32px;
+      min-width: 180px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+    .card.total::before  { background: linear-gradient(90deg, #6c63ff, #38bdf8); }
+    .card.income::before { background: linear-gradient(90deg, #10b981, #34d399); }
+    .card.expense::before{ background: linear-gradient(90deg, #f43f5e, #fb7185); }
+
+    .card .label { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+    .card .amount {
+      font-size: 1.7rem;
+      font-weight: 700;
+    }
+    .card.total .amount  { color: var(--accent); }
+    .card.income .amount { color: var(--income); }
+    .card.expense .amount{ color: var(--expense); }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 10px 28px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: all 0.2s;
+      letter-spacing: 0.5px;
+    }
+    .tab-btn:hover {
+      border-color: var(--primary);
+      color: var(--text);
+    }
+    .tab-btn.active {
+      background: linear-gradient(135deg, #6c63ff, #38bdf8);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 4px 15px rgba(108,99,255,0.4);
+    }
+
+    /* ── Tab Panels ── */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Toolbar ── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .toolbar input[type=text] {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      outline: none;
+      width: 200px;
+      transition: border-color 0.2s;
+    }
+    .toolbar input[type=text]:focus { border-color: var(--primary); }
+    .toolbar input[type=text]::placeholder { color: var(--text-muted); }
+
+    .btn {
+      padding: 8px 20px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #6c63ff, #818cf8);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(108,99,255,0.4);
+    }
+    .btn-primary:hover { opacity: 0.88; transform: translateY(-1px); }
+    .btn-danger {
+      background: var(--surface);
+      border: 1px solid var(--expense);
+      color: var(--expense);
+    }
+    .btn-danger:hover { background: var(--expense); color: #fff; }
+
+    /* ── Table ── */
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    thead tr {
+      background: var(--surface2);
+    }
+    thead th {
+      padding: 14px 16px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-align: left;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      border-bottom: 1px solid var(--border);
+      cursor: default;
+    }
+    thead th.sortable {
+      cursor: pointer;
+      user-select: none;
+      transition: color 0.2s;
+    }
+    thead th.sortable:hover { color: var(--text); }
+    thead th.sortable::after {
+      content: ' ⇅';
+      font-size: 0.7rem;
+      opacity: 0.5;
+      margin-left: 4px;
+    }
+    thead th.sortable.asc::after { content: ' ↓'; opacity: 0.9; }
+    thead th.sortable.desc::after { content: ' ↑'; opacity: 0.9; }
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--surface2); }
+    tbody td {
+      padding: 13px 16px;
+      font-size: 0.88rem;
+      vertical-align: middle;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-income  { background: rgba(16,185,129,0.15); color: #10b981; }
+    .badge-expense { background: rgba(244,63,94,0.15);  color: #f43f5e; }
+
+    .amount-income  { color: var(--income); font-weight: 600; }
+    .amount-expense { color: var(--expense); font-weight: 600; }
+    .amount-neutral { color: var(--text); font-weight: 600; }
+
+    .action-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      transition: all 0.15s;
+    }
+    .action-btn:hover { border-color: var(--expense); color: var(--expense); }
+    .action-btn.edit:hover { border-color: var(--accent); color: var(--accent); }
+
+    .empty-row td {
+      text-align: center;
+      padding: 48px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      width: 460px;
+      max-width: 95vw;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+      animation: modalIn 0.2s ease;
+    }
+    @keyframes modalIn {
+      from { opacity:0; transform: scale(0.93) translateY(10px); }
+      to   { opacity:1; transform: scale(1) translateY(0); }
+    }
+    .modal h3 {
+      font-size: 1.1rem;
+      margin-bottom: 24px;
+      color: var(--text);
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1/-1; }
+    .form-group label { font-size: 0.78rem; color: var(--text-muted); }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus { border-color: var(--primary); }
+    .form-group textarea { resize: vertical; min-height: 70px; }
+    .form-group select option { background: var(--surface); }
+
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+    .btn-cancel {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .btn-cancel:hover { color: var(--text); }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .form-row { grid-template-columns: 1fr; }
+      thead th:nth-child(6), tbody td:nth-child(6) { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="page-header">
+  <h1>✦ AI 消费记录表</h1>
+  <p>追踪你在 AI 工具上的每一笔收支</p>
+  <p id="sync-status" style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">数据同步中...</p>
+</div>
+
+<!-- Summary Cards -->
+<div class="summary">
+  <div class="card total">
+    <div class="label">净余额</div>
+    <div class="amount" id="summary-net">¥0.00</div>
+  </div>
+  <div class="card income">
+    <div class="label">总收入</div>
+    <div class="amount" id="summary-income">¥0.00</div>
+  </div>
+  <div class="card expense">
+    <div class="label">总支出</div>
+    <div class="amount" id="summary-expense">¥0.00</div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('all')">📋 收支明细</button>
+  <button class="tab-btn" onclick="switchTab('income')">💰 收入</button>
+  <button class="tab-btn" onclick="switchTab('expense')">💸 支出</button>
+</div>
+
+<!-- ── Tab: 收支明细 ── -->
+<div class="tab-panel active" id="panel-all">
+  <div class="toolbar">
+    <input type="text" id="search-all" placeholder="搜索名称 / 备注..." oninput="renderAll()"/>
+    <button class="btn btn-primary" onclick="openModal('all')">＋ 添加记录</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>序号</th><th class="sortable desc" onclick="toggleSort('all')">时间</th><th>名称</th><th>收入 / 支出</th><th>金额</th><th>备注</th><th>操作</th>
+      </tr></thead>
+      <tbody id="tbody-all"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── Tab: 支出 ── -->
+<div class="tab-panel" id="panel-expense">
+  <div class="toolbar">
+    <input type="text" id="search-expense" placeholder="搜索名称 / 备注..." oninput="renderExpense()"/>
+    <button class="btn btn-primary" onclick="openModal('expense')">＋ 添加支出</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>序号</th><th class="sortable desc" onclick="toggleSort('income')">时间</th><th>名称</th><th>收入</th><th>金额</th><th>备注</th><th>操作</th>
+      </tr></thead>
+      <tbody id="tbody-income"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── Tab: 收入 ── -->
+<div class="tab-panel" id="panel-income">
+  <div class="toolbar">
+    <input type="text" id="search-income" placeholder="搜索名称 / 备注..." oninput="renderIncome()"/>
+    <button class="btn btn-primary" onclick="openModal('income')">＋ 添加收入</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>序号</th><th class="sortable desc" onclick="toggleSort('expense')">时间</th><th>名称</th><th>收入</th><th>金额</th><th>备注</th><th>操作</th>
+      </tr></thead>
+      <tbody id="tbody-expense"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── Modal ── -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h3 id="modal-title">添加记录</h3>
+    <div class="form-row">
+      <div class="form-group">
+        <label>时间</label>
+        <input type="date" id="f-date"/>
+      </div>
+      <div class="form-group" id="type-group">
+        <label>类型</label>
+        <select id="f-type">
+          <option value="expense">支出</option>
+          <option value="income">收入</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group full">
+        <label>名称</label>
+        <input type="text" id="f-name" placeholder="如：ChatGPT Plus 订阅"/>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group full">
+        <label>金额（¥）</label>
+        <input type="number" id="f-amount" placeholder="0.00" min="0" step="0.01"/>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group full">
+        <label>备注</label>
+        <textarea id="f-note" placeholder="可选备注信息..."></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" id="modal-save-btn" onclick="saveRecord()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── Supabase Config ──
+  const supabaseUrl = 'https://xapomtlcxjwyyqoiprri.supabase.co';
+  const supabaseKey = 'sb_publishable_J8TtJaOuyVi_yQ4G0oNAOw_o3UpJLn3';
+  const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+  // ── Data Store ──
+  let records = [];
+
+  // Demo data (only on first load if cloud is empty)
+  async function initDemoData() {
+    const { data, error } = await supabase.from('records').select('*');
+    if (error) { console.error('Init error:', error); return; }
+    records = data.map(r => ({ id: r.record_id, date: r.date, name: r.name, type: r.type, amount: r.amount, note: r.note }));
+    if (records.length === 0) {
+      const demo = [
+        { id: Date.now()-9, date:'2026-03-01', name:'ChatGPT Plus 订阅',    type:'expense', amount:139,  note:'月度订阅' },
+        { id: Date.now()-8, date:'2026-03-05', name:'Claude Pro 订阅',       type:'expense', amount:150,  note:'月度订阅' },
+        { id: Date.now()-7, date:'2026-03-10', name:'AI 写作收入',            type:'income',  amount:800,  note:'客户稿费' },
+        { id: Date.now()-6, date:'2026-03-12', name:'Midjourney 订阅',        type:'expense', amount:60,   note:'Basic 套餐' },
+        { id: Date.now()-5, date:'2026-03-15', name:'AI 编程咨询收入',        type:'income',  amount:1200, note:'项目咨询' },
+        { id: Date.now()-4, date:'2026-03-18', name:'Cursor Pro 订阅',        type:'expense', amount:140,  note:'月度订阅' },
+        { id: Date.now()-3, date:'2026-03-20', name:'Gemini Advanced 订阅',   type:'expense', amount:139,  note:'月度订阅' },
+        { id: Date.now()-2, date:'2026-03-21', name:'AI 视频制作收入',        type:'income',  amount:600,  note:'接单收入' },
+        { id: Date.now()-1, date:'2026-03-22', name:'Suno AI 订阅',           type:'expense', amount:80,   note:'音乐生成' },
+      ];
+      for (const r of demo) {
+        await supabase.from('records').insert({ record_id: r.id, date: r.date, name: r.name, type: r.type, amount: r.amount, note: r.note });
+      }
+      records = demo;
+    }
+    updateSummary();
+    renderAll3();
+  }
+
+  async function save() {
+    // Not needed: all writes go directly to cloud via CRUD functions
+    updateSummary();
+  }
+
+  async function fetchRecords() {
+    const { data, error } = await supabase.from('records').select('*').order('created_at', { ascending: false });
+    if (error) { console.error('Fetch error:', error); document.getElementById('sync-status').textContent = '同步失败，请刷新'; return; }
+    records = data.map(r => ({ id: r.record_id, date: r.date, name: r.name, type: r.type, amount: r.amount, note: r.note }));
+    renderAll3();
+    updateSummary();
+    document.getElementById('sync-status').textContent = '已同步至云端';
+  }
+
+  // ── Summary ──
+  function updateSummary() {
+    const income  = records.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
+    const expense = records.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
+    document.getElementById('summary-income').textContent  = '¥'+income.toFixed(2);
+    document.getElementById('summary-expense').textContent = '¥'+expense.toFixed(2);
+    const net = income - expense;
+    const el = document.getElementById('summary-net');
+    el.textContent = (net>=0?'¥':'-¥') + Math.abs(net).toFixed(2);
+    el.style.color = net>=0 ? 'var(--income)' : 'var(--expense)';
+  }
+
+  // ── Tabs ──
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach((b,i)=>{
+      b.classList.toggle('active', ['all','income','expense'][i]===tab);
+    });
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    document.getElementById('panel-'+tab).classList.add('active');
+  }
+
+  // ── Render helpers ──
+  function fmt(amount, type) {
+    const cls = type==='income' ? 'amount-income' : 'amount-expense';
+    const sign = type==='income' ? '+' : '-';
+    return `<span class="${cls}">${sign}¥${amount.toFixed(2)}</span>`;
+  }
+  function typeBadge(type) {
+    return type==='income'
+      ? `<span class="badge badge-income">收入</span>`
+      : `<span class="badge badge-expense">支出</span>`;
+  }
+
+  function buildRows(list, showType) {
+    if (!list.length) return `<tr class="empty-row"><td colspan="7">暂无记录，点击右上角添加~</td></tr>`;
+    return list.map((r,i)=>`
+      <tr>
+        <td>${i+1}</td>
+        <td>${r.date}</td>
+        <td>${r.name}</td>
+        <td>${showType ? typeBadge(r.type) : (r.type==='income'?'<span class="badge badge-income">收入</span>':'<span class="badge badge-expense">支出</span>')}</td>
+        <td>${fmt(r.amount, r.type)}</td>
+        <td style="color:var(--text-muted);font-size:0.82rem">${r.note||'—'}</td>
+        <td style="display:flex;gap:6px">
+          <button class="action-btn edit" onclick="editRecord(${r.id})">编辑</button>
+          <button class="action-btn" onclick="deleteRecord(${r.id})">删除</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  const sortState = { all:'desc', income:'desc', expense:'desc' }; // 记录每个Tab当前排序方向
+
+  function toggleSort(tab) {
+    sortState[tab] = sortState[tab] === 'desc' ? 'asc' : 'desc';
+    const th = document.querySelector(`#panel-${tab} th.sortable`);
+    th.classList.remove('asc','desc');
+    th.classList.add(sortState[tab]);
+    if (tab === 'all') renderAll();
+    else if (tab === 'income') renderIncome();
+    else renderExpense();
+  }
+
+  function renderAll() {
+    const q = document.getElementById('search-all').value.toLowerCase();
+    const list = records.filter(r=>!q||(r.name+r.note).toLowerCase().includes(q))
+                        .sort((a,b)=>sortState.all === 'desc' ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date));
+    document.getElementById('tbody-all').innerHTML = buildRows(list, true);
+  }
+  function renderExpense() {
+    const q = document.getElementById('search-expense').value.toLowerCase();
+    const list = records.filter(r=>r.type==='expense'&&(!q||(r.name+r.note).toLowerCase().includes(q)))
+                        .sort((a,b)=>sortState.expense === 'desc' ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date));
+    document.getElementById('tbody-expense').innerHTML = buildRows(list, false);
+  }
+  function renderIncome() {
+    const q = document.getElementById('search-income').value.toLowerCase();
+    const list = records.filter(r=>r.type==='income'&&(!q||(r.name+r.note).toLowerCase().includes(q)))
+                        .sort((a,b)=>sortState.income === 'desc' ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date));
+    document.getElementById('tbody-income').innerHTML = buildRows(list, false);
+  }
+  function renderAll3() { renderAll(); renderIncome(); renderExpense(); }
+
+  // ── Delete ──
+  async function deleteRecord(id) {
+    if (!confirm('确认删除该记录？')) return;
+    const { error } = await supabase.from('records').delete().eq('record_id', id);
+    if (error) { alert('删除失败：' + error.message); return; }
+    await fetchRecords();
+  }
+
+  // ── Modal ──
+  let modalContext = 'all';
+  let editingId = null; // null = 新增模式，否则为编辑模式的记录id
+
+  function openModal(ctx) {
+    editingId = null;
+    modalContext = ctx;
+    document.getElementById('modal-title').textContent =
+      ctx==='expense' ? '添加支出记录' : ctx==='income' ? '添加收入记录' : '添加收支记录';
+    document.getElementById('modal-save-btn').textContent = '保存';
+    const sel = document.getElementById('f-type');
+    const typeGroup = document.getElementById('type-group');
+    if (ctx==='expense') { sel.value='expense'; typeGroup.style.display='none'; }
+    else if (ctx==='income') { sel.value='income'; typeGroup.style.display='none'; }
+    else { typeGroup.style.display='flex'; }
+    document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
+    document.getElementById('f-name').value = '';
+    document.getElementById('f-amount').value = '';
+    document.getElementById('f-note').value = '';
+    document.getElementById('modal-overlay').classList.add('open');
+  }
+
+  function editRecord(id) {
+    const r = records.find(r=>r.id===id);
+    if (!r) return;
+    editingId = id;
+    document.getElementById('modal-title').textContent = '编辑记录';
+    document.getElementById('modal-save-btn').textContent = '保存修改';
+    // 编辑时始终显示类型选择
+    document.getElementById('type-group').style.display = 'flex';
+    document.getElementById('f-date').value   = r.date;
+    document.getElementById('f-type').value   = r.type;
+    document.getElementById('f-name').value   = r.name;
+    document.getElementById('f-amount').value = r.amount;
+    document.getElementById('f-note').value   = r.note || '';
+    document.getElementById('modal-overlay').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('open');
+    editingId = null;
+  }
+  document.getElementById('modal-overlay').addEventListener('click', e=>{
+    if (e.target===e.currentTarget) closeModal();
+  });
+
+  async function saveRecord() {
+    const date   = document.getElementById('f-date').value;
+    const name   = document.getElementById('f-name').value.trim();
+    const type   = document.getElementById('f-type').value;
+    const amount = parseFloat(document.getElementById('f-amount').value);
+    const note   = document.getElementById('f-note').value.trim();
+    if (!date || !name || isNaN(amount) || amount<=0) {
+      alert('请填写时间、名称和有效金额！'); return;
+    }
+    if (editingId !== null) {
+      // 编辑模式：更新已有记录
+      const { error } = await supabase.from('records').update({ date, name, type, amount, note }).eq('record_id', editingId);
+      if (error) { alert('更新失败：' + error.message); return; }
+    } else {
+      // 新增模式
+      const newId = Date.now();
+      const { error } = await supabase.from('records').insert({ record_id: newId, date, name, type, amount, note });
+      if (error) { alert('添加失败：' + error.message); return; }
+    }
+    await fetchRecords();
+    closeModal();
+  }
+
+  // ── Init ──
+  initDemoData();
+  fetchRecords();
+</script>
+</body>
+</html>
